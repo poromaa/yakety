@@ -1,7 +1,9 @@
 #ifndef CLIPBOARD_H
 #define CLIPBOARD_H
 
-void clipboard_copy(const char *text);
-void clipboard_paste(void);
+#include <stdbool.h>
 
-#endif// CLIPBOARD_H
+// Pastes text into the focused application without replacing the user's clipboard.
+bool clipboard_paste_text(const char *text);
+
+#endif // CLIPBOARD_H

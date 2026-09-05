@@ -154,12 +154,16 @@ static void process_recorded_audio(double duration) {
         if (text && strlen(text) > 0) {
             // Text is already cleaned and has trailing space from transcription_process
             double clipboard_start = utils_now();
-            clipboard_copy(text);
-            clipboard_paste();
+            bool pasted = clipboard_paste_text(text);
             double clipboard_duration = utils_now() - clipboard_start;
 
             log_info("📝 \"%s\"", text);
-            log_info("✅ Text pasted! (clipboard operations took %.0f ms)", clipboard_duration * 1000.0);
+            if (pasted) {
+                log_info("✅ Text pasted and clipboard restored! (clipboard operations took %.0f ms)",
+                         clipboard_duration * 1000.0);
+            } else {
+                log_error("Failed to paste text without replacing the clipboard");
+            }
 
             double total_time = utils_now() - stop_start;
             log_info("⏱️  Total time from stop to paste: %.0f ms", total_time * 1000.0);
