@@ -159,7 +159,7 @@ static void process_recorded_audio(double duration) {
 
             log_info("📝 \"%s\"", text);
             if (pasted) {
-                log_info("✅ Text pasted and clipboard restored! (clipboard operations took %.0f ms)",
+                log_info("✅ Text paste sent without replacing the clipboard! (clipboard operations took %.0f ms)",
                          clipboard_duration * 1000.0);
             } else {
                 log_error("Failed to paste text without replacing the clipboard");

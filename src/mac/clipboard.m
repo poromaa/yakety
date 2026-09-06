@@ -3,8 +3,14 @@
 #include "../utils.h"
 #import <Carbon/Carbon.h>
 #import <Cocoa/Cocoa.h>
+#include <stdlib.h>
 
-#define PASTE_READ_DELAY_MS 100
+#define PASTEBOARD_RESTORE_DELAY_MS 250
+
+typedef struct {
+    NSArray *saved_items;
+    NSInteger temporary_change_count;
+} ClipboardRestoreContext;
 
 static NSArray *snapshot_pasteboard(NSPasteboard *pasteboard) {
     NSMutableArray *saved_items = [NSMutableArray array];
@@ -26,6 +32,34 @@ static NSArray *snapshot_pasteboard(NSPasteboard *pasteboard) {
     }
 
     return [saved_items copy];
+}
+
+static bool restore_pasteboard(NSPasteboard *pasteboard, NSArray *saved_items) {
+    [pasteboard clearContents];
+    if ([saved_items count] == 0) {
+        return true;
+    }
+    return [pasteboard writeObjects:saved_items];
+}
+
+static void restore_pasteboard_after_paste(void *data) {
+    ClipboardRestoreContext *context = (ClipboardRestoreContext *) data;
+
+    @autoreleasepool {
+        NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
+        if ([pasteboard changeCount] == context->temporary_change_count) {
+            if (restore_pasteboard(pasteboard, context->saved_items)) {
+                log_info("Previous clipboard contents restored");
+            } else {
+                log_error("Failed to restore previous pasteboard contents");
+            }
+        } else {
+            log_info("Clipboard changed during paste; keeping the newer contents");
+        }
+
+        [context->saved_items release];
+        free(context);
+    }
 }
 
 static bool post_paste_shortcut(void) {
@@ -91,35 +125,37 @@ bool clipboard_paste_text(const char *text) {
             return false;
         }
 
-        [pasteboard clearContents];
-        if (![pasteboard setString:string forType:NSPasteboardTypeString]) {
-            log_error("Failed to copy text to pasteboard");
-            [pasteboard clearContents];
-            if ([saved_items count] > 0) {
-                [pasteboard writeObjects:saved_items];
-            }
+        ClipboardRestoreContext *restore_context = malloc(sizeof(ClipboardRestoreContext));
+        if (!restore_context) {
+            log_error("Failed to allocate clipboard restore context");
             [saved_items release];
             return false;
         }
+        restore_context->saved_items = saved_items;
 
-        NSInteger temporary_change_count = [pasteboard changeCount];
-        bool pasted = post_paste_shortcut();
-        if (pasted) {
-            // The target application reads the pasteboard asynchronously after the shortcut.
-            utils_sleep_ms(PASTE_READ_DELAY_MS);
-        }
-
-        if ([pasteboard changeCount] == temporary_change_count) {
-            [pasteboard clearContents];
-            if ([saved_items count] > 0 && ![pasteboard writeObjects:saved_items]) {
+        [pasteboard clearContents];
+        if (![pasteboard setString:string forType:NSPasteboardTypeString]) {
+            log_error("Failed to copy text to pasteboard");
+            if (!restore_pasteboard(pasteboard, saved_items)) {
                 log_error("Failed to restore previous pasteboard contents");
-                pasted = false;
             }
-        } else {
-            log_info("Clipboard changed during paste; keeping the newer contents");
+            [saved_items release];
+            free(restore_context);
+            return false;
         }
 
-        [saved_items release];
-        return pasted;
+        restore_context->temporary_change_count = [pasteboard changeCount];
+        if (!post_paste_shortcut()) {
+            if (!restore_pasteboard(pasteboard, saved_items)) {
+                log_error("Failed to restore previous pasteboard contents");
+            }
+            [saved_items release];
+            free(restore_context);
+            return false;
+        }
+
+        // Returning from the hotkey callback lets macOS deliver Cmd+V before restoration.
+        utils_execute_main_thread(PASTEBOARD_RESTORE_DELAY_MS, restore_pasteboard_after_paste, restore_context);
+        return true;
     }
 }
