@@ -146,6 +146,10 @@ int menu_show(void) {
 
       // Load icon image
       NSString *iconPath = [[NSBundle mainBundle] pathForResource:@"menubar" ofType:@"png"];
+      if (!iconPath) {
+          // Xcode combines the 1x and 2x PNG resources into a multi-resolution TIFF.
+          iconPath = [[NSBundle mainBundle] pathForResource:@"menubar" ofType:@"tiff"];
+      }
 
       if (iconPath) {
           statusIcon = [[NSImage alloc] initWithContentsOfFile:iconPath];
