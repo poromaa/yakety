@@ -57,7 +57,7 @@ func runModalDialog<T: View, StateType: ModalDialogState>(
     
     // Modal loop compatible with both CFRunLoop and NSApp
     while !state.isCompleted {
-        if let event = NSApp.nextEvent(matching: .any, until: Date.distantFuture, inMode: RunLoop.Mode.default, dequeue: true) {
+        if let event = NSApp.nextEvent(matching: .any, until: Date.distantFuture, inMode: RunLoop.Mode.defaultRunLoopMode, dequeue: true) {
             NSApp.sendEvent(event)
         }
     }
@@ -99,7 +99,7 @@ func loadAppIcon() -> NSImage? {
 private func isGenericIcon(_ image: NSImage) -> Bool {
     // Check if this is a generic system icon by looking at common generic icon names
     let representations = image.representations
-    return representations.isEmpty || image.name()?.contains("Generic") == true
+    return representations.isEmpty || image.name()?.rawValue.contains("Generic") == true
 }
 
 // Note: Dialog state extensions will be defined in each dialog file to avoid circular dependencies
